@@ -1,5 +1,7 @@
 #![doc = include_str!("../README.md")]
 
+use core::f32;
+
 use bevy::{
     input::mouse::{MouseMotion, MouseWheel},
     prelude::*,
@@ -22,6 +24,7 @@ impl Plugin for ScrollViewPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<ScrollView>()
             .register_type::<ScrollableContent>()
+            .register_type::<ScrollTarget>()
             .add_systems(
                 Update,
                 (
@@ -61,6 +64,7 @@ impl Default for ScrollView {
 pub struct ScrollableContent {
     /// Scroll container offset to the `ScrollView`.
     pub pos_y: f32,
+
     /// Maximum value for the scroll. It is updated automatically based on the size of the children nodes.
     pub max_scroll: f32,
 }
@@ -74,17 +78,37 @@ impl ScrollableContent {
     pub fn scroll_to_bottom(&mut self) {
         self.pos_y = -self.max_scroll;
     }
+}
 
-    /// Scrolls by a specified amount.
+/// A temporary component setting the target value of the entity's `ScrollableContent` `y_pos`.
+#[derive(Component, Debug, Reflect, Default)]
+pub struct ScrollTarget {
+    /// Target value for `ScrollableContent` `y_pos`
+    pub target_y: f32,
+}
+
+impl ScrollTarget {
+    /// Initializes a new ScrollTarget.
     ///
     /// # Parameters
-    /// - `value`: The amount to scroll vertically. Positive values scroll down,
+    /// - `value`: The target value to scroll vertically. Positive values scroll down,
+    ///   and negative values scroll up.
+    pub fn from_value(value: f32, max_scroll: f32) -> Self {
+        let mut ret = Self::default();
+        ret.scroll_by(value, max_scroll);
+        ret
+    }
+
+    /// Sets the scroll target by a specified amount.
+    ///
+    /// # Parameters
+    /// - `value`: The target value to scroll vertically. Positive values scroll down,
     ///   and negative values scroll up.
     ///
-    /// Ensures the new position is clamped between the valid scroll range.
-    pub fn scroll_by(&mut self, value: f32) {
-        self.pos_y += value;
-        self.pos_y = self.pos_y.clamp(-self.max_scroll, 0.);
+    /// Ensures the new position is clamped using `max_scroll`.
+    pub fn scroll_by(&mut self, value: f32, max_scroll: f32) {
+        self.target_y += value;
+        self.target_y = self.target_y.clamp(-max_scroll, 0.);
     }
 }
 
@@ -130,19 +154,17 @@ pub fn create_scroll_view(mut q: Query<&mut Node, Added<ScrollView>>) {
 fn input_mouse_pressed_move(
     mut motion_evr: EventReader<MouseMotion>,
     mut q: Query<(&Children, &Interaction), With<ScrollView>>,
-    mut content_q: Query<&mut ScrollableContent>,
+    mut commands: Commands,
+    content_q: Query<&ScrollableContent>,
+    mut target_q: Query<&mut ScrollTarget>,
 ) {
     for evt in motion_evr.read() {
         for (children, &interaction) in q.iter_mut() {
             if interaction != Interaction::Pressed {
                 continue;
             }
-            for child in children.iter() {
-                let Ok(mut scroll) = content_q.get_mut(child) else {
-                    continue;
-                };
-                scroll.scroll_by(evt.delta.y);
-            }
+            let y = evt.delta.y;
+            set_scroll_targets(children, y, &mut commands, &content_q, &mut target_q);
         }
     }
 }
@@ -175,7 +197,9 @@ fn update_size(
 fn input_touch_pressed_move(
     touches: Res<Touches>,
     mut q: Query<(&Children, &Interaction), With<ScrollView>>,
-    mut content_q: Query<&mut ScrollableContent>,
+    mut commands: Commands,
+    content_q: Query<&ScrollableContent>,
+    mut target_q: Query<&mut ScrollTarget>,
 ) {
     for t in touches.iter() {
         let Some(touch) = touches.get_pressed(t.id()) else {
@@ -186,12 +210,8 @@ fn input_touch_pressed_move(
             if interaction != Interaction::Pressed {
                 continue;
             }
-            for child in children.iter() {
-                let Ok(mut scroll) = content_q.get_mut(child) else {
-                    continue;
-                };
-                scroll.scroll_by(touch.delta().y);
-            }
+            let y = touch.delta().y;
+            set_scroll_targets(children, y, &mut commands, &content_q, &mut target_q);
         }
     }
 }
@@ -200,7 +220,9 @@ fn scroll_events(
     mut scroll_evr: EventReader<MouseWheel>,
     mut q: Query<(&Children, &Interaction, &ScrollView), With<ScrollView>>,
     time: Res<Time>,
-    mut content_q: Query<&mut ScrollableContent>,
+    mut commands: Commands,
+    content_q: Query<&ScrollableContent>,
+    mut target_q: Query<&mut ScrollTarget>,
 ) {
     use bevy::input::mouse::MouseScrollUnit;
     for ev in scroll_evr.read() {
@@ -215,20 +237,46 @@ fn scroll_events(
                 MouseScrollUnit::Pixel => ev.y,
             };
             #[cfg(feature = "extra_logs")]
-            info!("Scroolling by {:#?}: {} movement", ev.unit, y);
+            info!("Scrolling by {:#?}: {} movement", ev.unit, y);
 
-            for child in children.iter() {
-                let Ok(mut scroll) = content_q.get_mut(child) else {
-                    continue;
-                };
-                scroll.scroll_by(y);
-            }
+            set_scroll_targets(children, y, &mut commands, &content_q, &mut target_q);
         }
     }
 }
 
-fn scroll_update(mut q: Query<(&ScrollableContent, &mut Node), Changed<ScrollableContent>>) {
-    for (scroll, mut style) in q.iter_mut() {
+fn set_scroll_targets(
+    children: &[Entity],
+    y: f32,
+    commands: &mut Commands,
+    content_q: &Query<&ScrollableContent>,
+    target_q: &mut Query<&mut ScrollTarget>,
+) {
+    for child in children.iter() {
+        let Ok(scroll) = content_q.get(*child) else {
+            continue;
+        };
+        if let Ok(mut target) = target_q.get_mut(*child) {
+            target.scroll_by(y, scroll.max_scroll);
+        } else {
+            commands.entity(*child).try_insert(ScrollTarget::from_value(
+                scroll.pos_y + y,
+                scroll.max_scroll,
+            ));
+        }
+    }
+}
+
+fn scroll_update(
+    mut commands: Commands,
+    mut q: Query<(Entity, &mut ScrollableContent, &ScrollTarget, &mut Node)>,
+    time: Res<Time>,
+) {
+    for (e, mut scroll, target, mut style) in q.iter_mut() {
+        scroll.pos_y +=
+            (target.target_y - scroll.pos_y) * time.delta_secs() * (f32::consts::PI * 2.0);
         style.top = Val::Px(scroll.pos_y);
+        if (target.target_y - scroll.pos_y).abs() < 0.01 {
+            commands.entity(e).try_remove::<ScrollTarget>();
+        }
     }
 }
