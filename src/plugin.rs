@@ -87,11 +87,17 @@ pub enum AnimationSystem {
 /// attached to the same entity, and tick the animator to animate the component.
 pub fn component_animator_system<T: Component<Mutability = Mutable>>(
     time: Res<Time>,
+    mut avg_delta: Local<f32>,
     mut animator_query: Query<(Entity, &mut Animator<T>)>,
     mut target_query: Query<&mut T>,
     events: ResMut<Events<TweenCompleted>>,
     mut commands: Commands,
 ) {
+    *avg_delta = if *avg_delta == 0.0 {
+        time.delta_secs()
+    } else {
+        ((*avg_delta * 5.0) + time.delta_secs()) / 6.0
+    };
     let mut events: Mut<Events<TweenCompleted>> = events.into();
     for (animator_entity, mut animator) in animator_query.iter_mut() {
         if animator.state != AnimatorState::Paused {
@@ -102,7 +108,7 @@ pub fn component_animator_system<T: Component<Mutability = Mutable>>(
             };
             let mut target = ComponentTarget::new(target);
             animator.tweenable_mut().tick(
-                time.delta().mul_f32(speed),
+                std::time::Duration::from_secs_f32(*avg_delta * speed),
                 &mut target,
                 entity,
                 &mut events,
