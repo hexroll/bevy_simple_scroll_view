@@ -117,7 +117,7 @@ impl ScrollTarget {
 /// This function defines the visual and layout properties of a scrollable container.
 pub fn scroll_view_node() -> Node {
     Node {
-        overflow: Overflow::clip(),
+        overflow: Overflow::clip_y(),
         align_items: AlignItems::Start,
         flex_direction: FlexDirection::Row,
         ..default()
