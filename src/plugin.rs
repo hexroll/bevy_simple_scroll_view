@@ -37,7 +37,7 @@ pub struct TweeningPlugin;
 
 impl Plugin for TweeningPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<TweenCompleted>().add_systems(
+        app.add_message::<TweenCompleted>().add_systems(
             Update,
             component_animator_system::<Transform>.in_set(AnimationSystem::AnimationUpdate),
         );
@@ -90,7 +90,7 @@ pub fn component_animator_system<T: Component<Mutability = Mutable>>(
     mut avg_delta: Local<f32>,
     mut animator_query: Query<(Entity, &mut Animator<T>)>,
     mut target_query: Query<&mut T>,
-    events: ResMut<Events<TweenCompleted>>,
+    events: ResMut<Messages<TweenCompleted>>,
     mut commands: Commands,
 ) {
     *avg_delta = if *avg_delta == 0.0 {
@@ -98,7 +98,7 @@ pub fn component_animator_system<T: Component<Mutability = Mutable>>(
     } else {
         ((*avg_delta * 5.0) + time.delta_secs()) / 6.0
     };
-    let mut events: Mut<Events<TweenCompleted>> = events.into();
+    let mut events: Mut<Messages<TweenCompleted>> = events.into();
     for (animator_entity, mut animator) in animator_query.iter_mut() {
         if animator.state != AnimatorState::Paused {
             let speed = animator.speed();
@@ -132,17 +132,17 @@ pub fn asset_animator_system<T, M>(
     time: Res<Time>,
     mut assets: ResMut<Assets<T>>,
     mut query: Query<(Entity, &M, &mut AssetAnimator<T>)>,
-    events: ResMut<Events<TweenCompleted>>,
+    events: ResMut<Messages<TweenCompleted>>,
     mut commands: Commands,
 ) where
     T: Asset,
     M: Component + Deref<Target = Handle<T>>,
 {
-    let mut events: Mut<Events<TweenCompleted>> = events.into();
+    let mut events: Mut<Messages<TweenCompleted>> = events.into();
     let mut target = AssetTarget::new(assets.reborrow());
     for (entity, handle, mut animator) in query.iter_mut() {
         if animator.state != AnimatorState::Paused {
-            target.handle = handle.clone_weak();
+            target.handle = (*handle).clone();
             if !target.is_valid() {
                 continue;
             }
@@ -187,7 +187,7 @@ mod tests {
         /// [`Transform`], and add the given animator on that same entity.
         pub fn new(animator: Animator<T>) -> Self {
             let mut world = World::new();
-            world.init_resource::<Events<TweenCompleted>>();
+            world.init_resource::<Messages<TweenCompleted>>();
             world.init_resource::<Time>();
 
             let entity = world.spawn((T::default(), animator)).id();
@@ -203,7 +203,7 @@ mod tests {
         /// Like [`TestEnv::new`], but the component is placed on a separate entity.
         pub fn new_separated(animator: Animator<T>) -> Self {
             let mut world = World::new();
-            world.init_resource::<Events<TweenCompleted>>();
+            world.init_resource::<Messages<TweenCompleted>>();
             world.init_resource::<Time>();
 
             let target = world.spawn(T::default()).id();
@@ -241,7 +241,7 @@ mod tests {
             system.run((), &mut self.world);
 
             // Update events after system ticked, in case system emitted some events
-            let mut events = self.world.resource_mut::<Events<TweenCompleted>>();
+            let mut events = self.world.resource_mut::<Messages<TweenCompleted>>();
             events.update();
         }
 
@@ -262,7 +262,7 @@ mod tests {
 
         /// Get the emitted event count since last tick.
         pub fn event_count(&self) -> usize {
-            let events = self.world.resource::<Events<TweenCompleted>>();
+            let events = self.world.resource::<Messages<TweenCompleted>>();
             events.get_cursor().len(events)
         }
     }

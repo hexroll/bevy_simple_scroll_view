@@ -28,10 +28,10 @@ bevy_text = ["bevy/bevy_text", "bevy/bevy_render", "bevy/bevy_sprite"]
 
 [dependencies]
 # Note: abuse 'bevy_color' to force 'bevy_math/curve' feature, which defines EaseFunction
-bevy = { version = "0.16", default-features = false, features = [ "bevy_color" ]}
+bevy = { version = "0.17", default-features = false, features = [ "bevy_color" ]}
 
 [dev-dependencies]
-bevy-inspector-egui = { version = "0.31" }
+bevy-inspector-egui = { version = "0.35" }
 
 [[example]]
 name = "menu"
