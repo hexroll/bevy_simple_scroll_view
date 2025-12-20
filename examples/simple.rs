@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use bevy::picking::events::{Pointer, Released};
+use bevy::picking::events::Pointer;
 use bevy::prelude::*;
 use bevy_simple_scroll_view::*;
 
@@ -67,7 +67,7 @@ fn setup(mut commands: Commands) {
                     .with_children(|scroll_area| {
                         for i in 1..21 {
                             scroll_area
-                                .spawn((base_node.clone(), BorderColor(CLR_3)))
+                                .spawn((base_node.clone(), BorderColor::all(CLR_3)))
                                 .with_child((Text::new(format!("Nr {} out of 20", i)), TEXT_COLOR));
                         }
                     });
@@ -75,10 +75,10 @@ fn setup(mut commands: Commands) {
         });
 }
 
-fn scroll_to_top(_t: Trigger<Pointer<Released>>, mut scroll: Single<&mut ScrollableContent>) {
+fn scroll_to_top(_t: On<Pointer<Release>>, mut scroll: Single<&mut ScrollableContent>) {
     scroll.scroll_to_top();
 }
 
-fn scroll_to_bottom(_t: Trigger<Pointer<Released>>, mut scroll: Single<&mut ScrollableContent>) {
+fn scroll_to_bottom(_t: On<Pointer<Release>>, mut scroll: Single<&mut ScrollableContent>) {
     scroll.scroll_to_bottom();
 }

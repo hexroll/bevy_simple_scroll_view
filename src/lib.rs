@@ -152,7 +152,7 @@ pub fn create_scroll_view(mut q: Query<&mut Node, Added<ScrollView>>) {
 }
 
 fn input_mouse_pressed_move(
-    mut motion_evr: EventReader<MouseMotion>,
+    mut motion_evr: MessageReader<MouseMotion>,
     mut q: Query<(&Children, &Interaction), With<ScrollView>>,
     mut commands: Commands,
     content_q: Query<&ScrollableContent>,
@@ -217,7 +217,7 @@ fn input_touch_pressed_move(
 }
 
 fn scroll_events(
-    mut scroll_evr: EventReader<MouseWheel>,
+    mut scroll_evr: MessageReader<MouseWheel>,
     mut q: Query<(&Children, &Interaction, &ScrollView), With<ScrollView>>,
     time: Res<Time>,
     mut commands: Commands,
