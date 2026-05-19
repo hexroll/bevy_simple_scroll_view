@@ -85,6 +85,8 @@ impl ScrollableContent {
 pub struct ScrollTarget {
     /// Target value for `ScrollableContent` `y_pos`
     pub target_y: f32,
+    /// Was this target set by a scroll bar?
+    pub set_by_scrollbar: bool,
 }
 
 impl ScrollTarget {
@@ -93,9 +95,10 @@ impl ScrollTarget {
     /// # Parameters
     /// - `value`: The target value to scroll vertically. Positive values scroll down,
     ///   and negative values scroll up.
-    pub fn from_value(value: f32, max_scroll: f32) -> Self {
+    pub fn from_value(value: f32, max_scroll: f32, scrollbar: bool) -> Self {
         let mut ret = Self::default();
         ret.scroll_by(value, max_scroll);
+        ret.set_by_scrollbar = scrollbar;
         ret
     }
 
@@ -256,11 +259,13 @@ fn set_scroll_targets(
             continue;
         };
         if let Ok(mut target) = target_q.get_mut(*child) {
+            target.set_by_scrollbar = false;
             target.scroll_by(y, scroll.max_scroll);
         } else {
             commands.entity(*child).try_insert(ScrollTarget::from_value(
                 scroll.pos_y + y,
                 scroll.max_scroll,
+                false,
             ));
         }
     }
